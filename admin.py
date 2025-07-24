@@ -233,6 +233,45 @@ def get_all_teams(current_user: User = Depends(require_role(UserRole.admin)), db
         for team in teams
     ]
 
+@router.get("/teams/department/{department_id}")
+def get_teams_by_department(department_id: int, db: Session = Depends(get_db)):
+    """Get teams by department, optionally filtering out teams with supervisors"""
+    teams = db.query(Team).filter(Team.department_id == department_id).all()
+    return [
+        {
+            "id": team.id,
+            "name": team.name,
+            "description": team.description,
+            "department_id": team.department_id,
+            "department_name": team.department.name,
+            "supervisor_id": team.supervisor_id,
+            "supervisor_name": team.supervisor.name if team.supervisor else None,
+            "employee_count": len(team.employees)
+        }
+        for team in teams
+    ]
+
+@router.get("/teams/department/{department_id}/supervisor-less")
+def get_supervisor_less_teams_by_department(department_id: int, db: Session = Depends(get_db)):
+    """Get teams by department that don't have supervisors assigned"""
+    teams = db.query(Team).filter(
+        Team.department_id == department_id,
+        Team.supervisor_id.is_(None)
+    ).all()
+    return [
+        {
+            "id": team.id,
+            "name": team.name,
+            "description": team.description,
+            "department_id": team.department_id,
+            "department_name": team.department.name,
+            "supervisor_id": team.supervisor_id,
+            "supervisor_name": team.supervisor.name if team.supervisor else None,
+            "employee_count": len(team.employees)
+        }
+        for team in teams
+    ]
+
 # Update team
 @router.put("/teams/{team_id}")
 def update_team(team_id: int, request: UpdateTeamRequest, current_user: User = Depends(require_role(UserRole.admin)), db: Session = Depends(get_db)):
