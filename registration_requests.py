@@ -70,19 +70,19 @@ def submit_registration_request(request: RegistrationRequestCreate, db: Session 
     if existing_user:
         raise HTTPException(status_code=400, detail="Username or email already exists")
     
-    # Check for duplicate employee ID if provided
-    if request.employee_id:
-        existing_employee = db.query(User).filter(User.name == request.employee_id).first()
-        if existing_employee:
-            raise HTTPException(status_code=400, detail="Employee ID already exists")
-    
     # Check for duplicate registration number if provided
-    if request.registration_number:
+    if request.registration_number and request.registration_number.strip():
         existing_registration = db.query(UserRegistrationRequest).filter(
             UserRegistrationRequest.registration_number == request.registration_number
         ).first()
         if existing_registration:
             raise HTTPException(status_code=400, detail="Registration number already exists")
+    
+    # Check for duplicate employee ID if provided
+    if request.employee_id:
+        existing_employee = db.query(User).filter(User.name == request.employee_id).first()
+        if existing_employee:
+            raise HTTPException(status_code=400, detail="Employee ID already exists")
     
     # Check for duplicate NIC
     existing_nic = db.query(UserRegistrationRequest).filter(
@@ -94,6 +94,14 @@ def submit_registration_request(request: RegistrationRequestCreate, db: Session 
     # Hash the password
     hashed_password = get_password_hash(request.password)
     
+    # Clean up empty strings to None for optional fields
+    registration_number = request.registration_number.strip() if request.registration_number and request.registration_number.strip() else None
+    hospital = request.hospital.strip() if request.hospital and request.hospital.strip() else None
+    team = request.team.strip() if request.team and request.team.strip() else None
+    address = request.address.strip() if request.address and request.address.strip() else None
+    supervisor_name = request.supervisor_name.strip() if request.supervisor_name and request.supervisor_name.strip() else None
+    contact = request.contact.strip() if request.contact and request.contact.strip() else None
+    
     # Create registration request
     registration_request = UserRegistrationRequest(
         first_name=request.first_name,
@@ -101,15 +109,15 @@ def submit_registration_request(request: RegistrationRequestCreate, db: Session 
         gender=request.gender,
         nic=request.nic,
         birthday=request.birthday,
-        contact=request.contact,
+        contact=contact,
         job_role=request.job_role,
         employee_id=request.employee_id,
         department=request.department,
-        team=request.team,
-        address=request.address,
-        supervisor_name=request.supervisor_name,
-        registration_number=request.registration_number,
-        hospital=request.hospital,
+        team=team,
+        address=address,
+        supervisor_name=supervisor_name,
+        registration_number=registration_number,
+        hospital=hospital,
         username=request.username,
         email=request.email,
         password=hashed_password,

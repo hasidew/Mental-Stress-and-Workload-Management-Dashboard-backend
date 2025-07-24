@@ -98,6 +98,11 @@ def submit_stress_assessment(
         if current_user.role == UserRole.supervisor:
             request.share_with_supervisor = False
         
+        # For HR managers, force both sharing options to False (no sharing for HR)
+        if current_user.role == UserRole.hr_manager:
+            request.share_with_supervisor = False
+            request.share_with_hr = False
+        
         # Check if user already has a stress score
         existing_score = db.query(StressScore).filter(StressScore.employee_id == current_user.id).first()
         
@@ -177,18 +182,15 @@ def update_sharing_preferences(
     
     # For supervisors, prevent sharing with supervisor
     if current_user.role == UserRole.supervisor:
-        if request.share_with_supervisor is not None and request.share_with_supervisor:
-            raise HTTPException(status_code=400, detail="Supervisors cannot share stress scores with their supervisor")
-        # Force share_with_supervisor to False for supervisors
-        setattr(stress_score, 'share_with_supervisor', False)
-    else:
-        # For non-supervisors, allow normal supervisor sharing
-        if request.share_with_supervisor is not None:
-            setattr(stress_score, 'share_with_supervisor', request.share_with_supervisor)
+        request.share_with_supervisor = False
     
-    if request.share_with_hr is not None:
-        setattr(stress_score, 'share_with_hr', request.share_with_hr)
+    # For HR managers, prevent all sharing
+    if current_user.role == UserRole.hr_manager:
+        request.share_with_supervisor = False
+        request.share_with_hr = False
     
+    setattr(stress_score, 'share_with_supervisor', request.share_with_supervisor)
+    setattr(stress_score, 'share_with_hr', request.share_with_hr)
     setattr(stress_score, 'updated_at', datetime.utcnow())
     db.commit()
     db.refresh(stress_score)

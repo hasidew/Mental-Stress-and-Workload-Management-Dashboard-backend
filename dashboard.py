@@ -74,16 +74,80 @@ def psychiatrist_dashboard(current_user: User = Depends(require_role(UserRole.ps
 # HR Manager dashboard
 @router.get("/hr")
 def hr_dashboard(current_user: User = Depends(require_role(UserRole.hr_manager)), db: Session = Depends(get_db)):
+    # Get all employees and supervisors
     employees = db.query(User).filter(User.role == UserRole.employee).all()
     supervisors = db.query(User).filter(User.role == UserRole.supervisor).all()
     psychiatrists = db.query(User).filter(User.role == UserRole.psychiatrist).all()
-    stress = db.query(StressScore).all()
+    
+    # Get stress scores shared with HR
+    stress_scores_shared_with_hr = db.query(StressScore).filter(
+        StressScore.share_with_hr == True
+    ).all()
+    
+    # Get HR's own workloads
+    hr_workloads = db.query(DailyWorkload).filter(DailyWorkload.employee_id == current_user.id).all()
+    
+    # Get HR's own stress score
+    hr_stress_score = db.query(StressScore).filter(StressScore.employee_id == current_user.id).first()
+    
+    # Get available consultants
+    from models import Consultant
+    available_consultants = db.query(Consultant).all()
+    
+    # Get HR's own consultant bookings
+    from models import ConsultantBooking
+    hr_bookings = db.query(ConsultantBooking).filter(ConsultantBooking.employee_id == current_user.id).all()
+    
     return {
         "user": current_user.username,
         "employees": [e.username for e in employees],
         "supervisors": [s.username for s in supervisors],
         "psychiatrists": [p.username for p in psychiatrists],
-        "stress_scores": [{"employee": s.employee_id, "score": s.score} for s in stress]
+        "stress_scores_shared_with_hr": [
+            {
+                "employee_id": s.employee_id,
+                "employee_name": s.employee.name if s.employee else "Unknown",
+                "score": s.score,
+                "level": s.level,
+                "share_with_supervisor": s.share_with_supervisor,
+                "share_with_hr": s.share_with_hr,
+                "updated_at": s.updated_at
+            } for s in stress_scores_shared_with_hr
+        ],
+        "hr_workloads": [
+            {
+                "id": w.id,
+                "description": w.description,
+                "date": w.date
+            } for w in hr_workloads
+        ],
+        "hr_stress_score": {
+            "score": hr_stress_score.score if hr_stress_score else None,
+            "level": hr_stress_score.level if hr_stress_score else None,
+            "updated_at": hr_stress_score.updated_at if hr_stress_score else None
+        },
+        "available_consultants": [
+            {
+                "id": c.id,
+                "name": c.name,
+                "specialization": c.specialization,
+                "hospital": c.hospital
+            } for c in available_consultants
+        ],
+        "hr_bookings": [
+            {
+                "id": b.id,
+                "consultant_name": b.consultant.name if b.consultant else "Unknown",
+                "booking_date": b.booking_date,
+                "status": b.status.value,
+                "duration_minutes": b.duration_minutes
+            } for b in hr_bookings
+        ],
+        "total_employees": len(employees),
+        "total_supervisors": len(supervisors),
+        "total_shared_stress_scores": len(stress_scores_shared_with_hr),
+        "total_hr_workloads": len(hr_workloads),
+        "total_hr_bookings": len(hr_bookings)
     }
 
 # Employee adds daily workload
@@ -113,3 +177,87 @@ def get_all_workloads(current_user: User = Depends(require_role(UserRole.supervi
         {"id": w.id, "employee_id": w.employee_id, "description": w.description, "date": w.date}
         for w in workloads
     ] 
+
+# HR Manager views all employees' workloads
+@router.get("/hr/workloads")
+def get_hr_workloads(current_user: User = Depends(require_role(UserRole.hr_manager)), db: Session = Depends(get_db)):
+    workloads = db.query(DailyWorkload).all()
+    return [
+        {"id": w.id, "employee_id": w.employee_id, "description": w.description, "date": w.date}
+        for w in workloads
+    ]
+
+# HR Manager adds their own daily workload
+@router.post("/hr/workload")
+def add_hr_workload(request: DailyWorkloadRequest, current_user: User = Depends(require_role(UserRole.hr_manager)), db: Session = Depends(get_db)):
+    workload = DailyWorkload(
+        description=request.description,
+        date=request.date,
+        employee_id=current_user.id
+    )
+    db.add(workload)
+    db.commit()
+    db.refresh(workload)
+    return {"message": "Daily workload added", "id": workload.id}
+
+# HR Manager views their own workloads
+@router.get("/hr/my-workloads")
+def get_hr_my_workloads(current_user: User = Depends(require_role(UserRole.hr_manager)), db: Session = Depends(get_db)):
+    workloads = db.query(DailyWorkload).filter(DailyWorkload.employee_id == current_user.id).order_by(DailyWorkload.date.desc()).all()
+    return [{"id": w.id, "description": w.description, "date": w.date} for w in workloads]
+
+# HR Manager books consultant for themselves
+@router.post("/hr/book-consultant")
+def hr_book_consultant(request: dict, current_user: User = Depends(require_role(UserRole.hr_manager)), db: Session = Depends(get_db)):
+    from models import ConsultantBooking, BookingStatus
+    from datetime import datetime
+    
+    booking = ConsultantBooking(
+        consultant_id=request['consultant_id'],
+        employee_id=current_user.id,
+        booked_by_id=current_user.id,
+        booking_date=datetime.fromisoformat(request['booking_date'].replace('Z', '+00:00')),
+        duration_minutes=request.get('duration_minutes', 60),
+        status=BookingStatus.scheduled,
+        notes=request.get('notes', '')
+    )
+    db.add(booking)
+    db.commit()
+    db.refresh(booking)
+    return {"message": "Consultant booked successfully", "id": booking.id}
+
+# HR Manager views their consultant bookings
+@router.get("/hr/my-bookings")
+def get_hr_my_bookings(current_user: User = Depends(require_role(UserRole.hr_manager)), db: Session = Depends(get_db)):
+    from models import ConsultantBooking
+    bookings = db.query(ConsultantBooking).filter(ConsultantBooking.employee_id == current_user.id).all()
+    return [
+        {
+            "id": b.id,
+            "consultant_name": b.consultant.name if b.consultant else "Unknown",
+            "booking_date": b.booking_date,
+            "status": b.status.value,
+            "duration_minutes": b.duration_minutes,
+            "notes": b.notes
+        } for b in bookings
+    ]
+
+# HR Manager books consultant for an employee
+@router.post("/hr/book-for-employee")
+def hr_book_for_employee(request: dict, current_user: User = Depends(require_role(UserRole.hr_manager)), db: Session = Depends(get_db)):
+    from models import ConsultantBooking, BookingStatus
+    from datetime import datetime
+    
+    booking = ConsultantBooking(
+        consultant_id=request['consultant_id'],
+        employee_id=request['employee_id'],
+        booked_by_id=current_user.id,
+        booking_date=datetime.fromisoformat(request['booking_date'].replace('Z', '+00:00')),
+        duration_minutes=request.get('duration_minutes', 60),
+        status=BookingStatus.scheduled,
+        notes=request.get('notes', '')
+    )
+    db.add(booking)
+    db.commit()
+    db.refresh(booking)
+    return {"message": "Consultant booked for employee successfully", "id": booking.id} 
