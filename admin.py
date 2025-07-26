@@ -486,6 +486,72 @@ def create_consultant(request: CreateConsultantRequest, current_user: User = Dep
         }
     }
 
+@router.post("/consultants/with-availability")
+def create_consultant_with_availability_admin(request: CreateConsultantWithAvailabilityRequest, current_user: User = Depends(require_role(UserRole.admin)), db: Session = Depends(get_db)):
+    """Create a consultant with availability (admin endpoint)"""
+    from models import Consultant, ConsultantAvailability
+    
+    # Check if consultant with registration number already exists
+    existing_consultant = db.query(Consultant).filter(Consultant.registration_number == request.registration_number).first()
+    if existing_consultant:
+        raise HTTPException(status_code=400, detail="Consultant with this registration number already exists")
+    
+    # Create consultant
+    consultant = Consultant(
+        name=request.name,
+        qualifications=request.qualifications,
+        registration_number=request.registration_number,
+        hospital=request.hospital,
+        specialization=request.specialization,
+        created_at=datetime.utcnow()
+    )
+    
+    db.add(consultant)
+    db.commit()
+    db.refresh(consultant)
+    
+    # Add availabilities
+    for availability_data in request.availabilities:
+        try:
+            start_time = datetime.strptime(availability_data['start_time'], '%H:%M').time()
+            end_time = datetime.strptime(availability_data['end_time'], '%H:%M').time()
+            
+            availability = ConsultantAvailability(
+                consultant_id=consultant.id,
+                day_of_week=availability_data['day_of_week'],
+                start_time=start_time,
+                end_time=end_time,
+                is_available=True
+            )
+            db.add(availability)
+        except (ValueError, KeyError) as e:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=f"Invalid availability data: {str(e)}")
+    
+    db.commit()
+    db.refresh(consultant)
+    
+    return {
+        "message": "Consultant created successfully with availability",
+        "consultant": {
+            "id": consultant.id,
+            "name": consultant.name,
+            "qualifications": consultant.qualifications,
+            "registration_number": consultant.registration_number,
+            "hospital": consultant.hospital,
+            "specialization": consultant.specialization,
+            "availabilities": [
+                {
+                    "day_of_week": avail.day_of_week,
+                    "start_time": avail.start_time.strftime('%H:%M'),
+                    "end_time": avail.end_time.strftime('%H:%M'),
+                    "is_available": avail.is_available
+                }
+                for avail in consultant.availabilities
+            ]
+        }
+    }
+
 # Admin gets all users
 # Get current user data
 @router.get("/users/me")
@@ -650,6 +716,148 @@ def delete_user(user_id: int, current_user: User = Depends(require_role(UserRole
     
     return {"message": "User deleted successfully"}
 
+# Admin consultant management endpoints
+@router.get("/consultants")
+def get_all_consultants_admin(current_user: User = Depends(require_role(UserRole.admin)), db: Session = Depends(get_db)):
+    """Get all consultants (admin endpoint)"""
+    from models import Consultant, ConsultantAvailability
+    
+    consultants = db.query(Consultant).all()
+    result = []
+    
+    for consultant in consultants:
+        availabilities = db.query(ConsultantAvailability).filter(
+            ConsultantAvailability.consultant_id == consultant.id
+        ).all()
+        
+        availability_data = []
+        for availability in availabilities:
+            availability_data.append({
+                "id": availability.id,
+                "day_of_week": availability.day_of_week,
+                "start_time": availability.start_time.strftime('%H:%M'),
+                "end_time": availability.end_time.strftime('%H:%M'),
+                "is_available": availability.is_available
+            })
+        
+        result.append({
+            "id": consultant.id,
+            "name": consultant.name,
+            "qualifications": consultant.qualifications,
+            "registration_number": consultant.registration_number,
+            "hospital": consultant.hospital,
+            "specialization": consultant.specialization,
+            "availabilities": availability_data
+        })
+    
+    return result
+
+@router.get("/consultants/{consultant_id}")
+def get_consultant_admin(consultant_id: int, current_user: User = Depends(require_role(UserRole.admin)), db: Session = Depends(get_db)):
+    """Get a specific consultant (admin endpoint)"""
+    from models import Consultant, ConsultantAvailability
+    
+    consultant = db.query(Consultant).filter(Consultant.id == consultant_id).first()
+    if not consultant:
+        raise HTTPException(status_code=404, detail="Consultant not found")
+    
+    availabilities = db.query(ConsultantAvailability).filter(
+        ConsultantAvailability.consultant_id == consultant.id
+    ).all()
+    
+    availability_data = []
+    for availability in availabilities:
+        availability_data.append({
+            "id": availability.id,
+            "day_of_week": availability.day_of_week,
+            "start_time": availability.start_time.strftime('%H:%M'),
+            "end_time": availability.end_time.strftime('%H:%M'),
+            "is_available": availability.is_available
+        })
+    
+    return {
+        "id": consultant.id,
+        "name": consultant.name,
+        "qualifications": consultant.qualifications,
+        "registration_number": consultant.registration_number,
+        "hospital": consultant.hospital,
+        "specialization": consultant.specialization,
+        "availabilities": availability_data
+    }
+
+@router.put("/consultants/{consultant_id}")
+def update_consultant_admin(consultant_id: int, request: UpdateConsultantRequest, current_user: User = Depends(require_role(UserRole.admin)), db: Session = Depends(get_db)):
+    """Update a consultant (admin endpoint)"""
+    from models import Consultant, ConsultantAvailability
+    
+    consultant = db.query(Consultant).filter(Consultant.id == consultant_id).first()
+    if not consultant:
+        raise HTTPException(status_code=404, detail="Consultant not found")
+    
+    # Update consultant fields
+    if request.name is not None:
+        consultant.name = request.name
+    if request.qualifications is not None:
+        consultant.qualifications = request.qualifications
+    if request.registration_number is not None:
+        consultant.registration_number = request.registration_number
+    if request.hospital is not None:
+        consultant.hospital = request.hospital
+    if request.specialization is not None:
+        consultant.specialization = request.specialization
+    
+    # Update availabilities if provided
+    if request.availabilities is not None:
+        # Remove existing availabilities
+        db.query(ConsultantAvailability).filter(ConsultantAvailability.consultant_id == consultant_id).delete()
+        
+        # Add new availabilities
+        for availability_data in request.availabilities:
+            try:
+                start_time = datetime.strptime(availability_data['start_time'], '%H:%M').time()
+                end_time = datetime.strptime(availability_data['end_time'], '%H:%M').time()
+                
+                availability = ConsultantAvailability(
+                    consultant_id=consultant.id,
+                    day_of_week=availability_data['day_of_week'],
+                    start_time=start_time,
+                    end_time=end_time,
+                    is_available=True
+                )
+                db.add(availability)
+            except (ValueError, KeyError) as e:
+                db.rollback()
+                raise HTTPException(status_code=400, detail=f"Invalid availability data: {str(e)}")
+    
+    db.commit()
+    db.refresh(consultant)
+    
+    return {
+        "message": "Consultant updated successfully",
+        "consultant": {
+            "id": consultant.id,
+            "name": consultant.name,
+            "qualifications": consultant.qualifications,
+            "registration_number": consultant.registration_number,
+            "hospital": consultant.hospital,
+            "specialization": consultant.specialization
+        }
+    }
+
+@router.delete("/consultants/{consultant_id}")
+def delete_consultant_admin(consultant_id: int, current_user: User = Depends(require_role(UserRole.admin)), db: Session = Depends(get_db)):
+    """Delete a consultant (admin endpoint)"""
+    from models import Consultant
+    
+    consultant = db.query(Consultant).filter(Consultant.id == consultant_id).first()
+    if not consultant:
+        raise HTTPException(status_code=404, detail="Consultant not found")
+    
+    db.delete(consultant)
+    db.commit()
+    
+    return {"message": "Consultant deleted successfully"}
+
 # Admin dashboard
 @router.get("/dashboard")
 def admin_dashboard(current_user: User = Depends(require_role(UserRole.admin)), db: Session = Depends(get_db)):
@@ -684,205 +892,4 @@ def admin_dashboard(current_user: User = Depends(require_role(UserRole.admin)), 
             }
             for user in db.query(User).order_by(User.id.desc()).limit(5).all()
         ]
-    }
-
-# Consultant management endpoints
-@router.post("/consultants/with-availability")
-def create_consultant_with_availability(request: CreateConsultantWithAvailabilityRequest, current_user: User = Depends(require_role(UserRole.admin)), db: Session = Depends(get_db)):
-    # Check if consultant with registration number already exists
-    existing_consultant = db.query(Consultant).filter(Consultant.registration_number == request.registration_number).first()
-    if existing_consultant:
-        raise HTTPException(status_code=400, detail="Consultant with this registration number already exists")
-    
-    # Create consultant
-    consultant = Consultant(
-        name=request.name,
-        qualifications=request.qualifications,
-        registration_number=request.registration_number,
-        hospital=request.hospital,
-        specialization=request.specialization,
-        created_at=datetime.utcnow()
-    )
-    
-    db.add(consultant)
-    db.commit()
-    db.refresh(consultant)
-    
-    # Add availabilities
-    for availability_data in request.availabilities:
-        try:
-            start_time = datetime.strptime(availability_data['start_time'], '%H:%M').time()
-            end_time = datetime.strptime(availability_data['end_time'], '%H:%M').time()
-            
-            availability = ConsultantAvailability(
-                consultant_id=consultant.id,
-                day_of_week=availability_data['day_of_week'],
-                start_time=start_time,
-                end_time=end_time,
-                is_available=True
-            )
-            db.add(availability)
-        except (ValueError, KeyError) as e:
-            db.rollback()
-            raise HTTPException(status_code=400, detail=f"Invalid availability data: {str(e)}")
-    
-    db.commit()
-    db.refresh(consultant)
-    
-    return {
-        "message": "Consultant created successfully with availability",
-        "consultant": {
-            "id": consultant.id,
-            "name": consultant.name,
-            "qualifications": consultant.qualifications,
-            "registration_number": consultant.registration_number,
-            "hospital": consultant.hospital,
-            "specialization": consultant.specialization,
-            "availabilities": [
-                {
-                    "day_of_week": avail.day_of_week,
-                    "start_time": avail.start_time.strftime('%H:%M'),
-                    "end_time": avail.end_time.strftime('%H:%M'),
-                    "is_available": avail.is_available
-                }
-                for avail in consultant.availabilities
-            ]
-        }
-    }
-
-@router.get("/consultants")
-def get_all_consultants(current_user: User = Depends(require_role(UserRole.admin)), db: Session = Depends(get_db)):
-    consultants = db.query(Consultant).all()
-    return [
-        {
-            "id": consultant.id,
-            "name": consultant.name,
-            "qualifications": consultant.qualifications,
-            "registration_number": consultant.registration_number,
-            "hospital": consultant.hospital,
-            "specialization": consultant.specialization,
-            "created_at": consultant.created_at,
-            "availabilities": [
-                {
-                    "id": avail.id,
-                    "day_of_week": avail.day_of_week,
-                    "start_time": avail.start_time.strftime('%H:%M'),
-                    "end_time": avail.end_time.strftime('%H:%M'),
-                    "is_available": avail.is_available
-                }
-                for avail in consultant.availabilities
-            ]
-        }
-        for consultant in consultants
-    ]
-
-@router.get("/consultants/{consultant_id}")
-def get_consultant(consultant_id: int, current_user: User = Depends(require_role(UserRole.admin)), db: Session = Depends(get_db)):
-    consultant = db.query(Consultant).filter(Consultant.id == consultant_id).first()
-    if not consultant:
-        raise HTTPException(status_code=404, detail="Consultant not found")
-    
-    return {
-        "id": consultant.id,
-        "name": consultant.name,
-        "qualifications": consultant.qualifications,
-        "registration_number": consultant.registration_number,
-        "hospital": consultant.hospital,
-        "specialization": consultant.specialization,
-        "created_at": consultant.created_at,
-        "availabilities": [
-            {
-                "id": avail.id,
-                "day_of_week": avail.day_of_week,
-                "start_time": avail.start_time.strftime('%H:%M'),
-                "end_time": avail.end_time.strftime('%H:%M'),
-                "is_available": avail.is_available
-            }
-            for avail in consultant.availabilities
-        ]
-    }
-
-@router.put("/consultants/{consultant_id}")
-def update_consultant(consultant_id: int, request: UpdateConsultantRequest, current_user: User = Depends(require_role(UserRole.admin)), db: Session = Depends(get_db)):
-    consultant = db.query(Consultant).filter(Consultant.id == consultant_id).first()
-    if not consultant:
-        raise HTTPException(status_code=404, detail="Consultant not found")
-    
-    # Update basic fields
-    if request.name is not None:
-        setattr(consultant, 'name', request.name)
-    if request.qualifications is not None:
-        setattr(consultant, 'qualifications', request.qualifications)
-    if request.hospital is not None:
-        setattr(consultant, 'hospital', request.hospital)
-    if request.specialization is not None:
-        setattr(consultant, 'specialization', request.specialization)
-    
-    # Check registration number uniqueness if being updated
-    if request.registration_number is not None:
-        existing_consultant = db.query(Consultant).filter(
-            Consultant.registration_number == request.registration_number,
-            Consultant.id != consultant_id
-        ).first()
-        if existing_consultant:
-            raise HTTPException(status_code=400, detail="Registration number already exists")
-        setattr(consultant, 'registration_number', request.registration_number)
-    
-    # Update availabilities if provided
-    if request.availabilities is not None:
-        # Delete existing availabilities
-        db.query(ConsultantAvailability).filter(ConsultantAvailability.consultant_id == consultant_id).delete()
-        
-        # Add new availabilities
-        for availability_data in request.availabilities:
-            try:
-                start_time = datetime.strptime(availability_data['start_time'], '%H:%M').time()
-                end_time = datetime.strptime(availability_data['end_time'], '%H:%M').time()
-                
-                availability = ConsultantAvailability(
-                    consultant_id=consultant.id,
-                    day_of_week=availability_data['day_of_week'],
-                    start_time=start_time,
-                    end_time=end_time,
-                    is_available=True
-                )
-                db.add(availability)
-            except (ValueError, KeyError) as e:
-                db.rollback()
-                raise HTTPException(status_code=400, detail=f"Invalid availability data: {str(e)}")
-    
-    db.commit()
-    db.refresh(consultant)
-    
-    return {
-        "message": "Consultant updated successfully",
-        "consultant": {
-            "id": consultant.id,
-            "name": consultant.name,
-            "qualifications": consultant.qualifications,
-            "registration_number": consultant.registration_number,
-            "hospital": consultant.hospital,
-            "specialization": consultant.specialization,
-            "availabilities": [
-                {
-                    "id": avail.id,
-                    "day_of_week": avail.day_of_week,
-                    "start_time": avail.start_time.strftime('%H:%M'),
-                    "end_time": avail.end_time.strftime('%H:%M'),
-                    "is_available": avail.is_available
-                }
-                for avail in consultant.availabilities
-            ]
-        }
-    }
-
-@router.delete("/consultants/{consultant_id}")
-def delete_consultant(consultant_id: int, current_user: User = Depends(require_role(UserRole.admin)), db: Session = Depends(get_db)):
-    consultant = db.query(Consultant).filter(Consultant.id == consultant_id).first()
-    if not consultant:
-        raise HTTPException(status_code=404, detail="Consultant not found")
-    
-    db.delete(consultant)
-    db.commit()
-    
-    return {"message": "Consultant deleted successfully"} 
+    } 

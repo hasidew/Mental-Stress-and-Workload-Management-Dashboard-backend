@@ -10,6 +10,7 @@ from admin import router as admin_router
 from registration_requests import router as registration_requests_router
 from tasks import router as tasks_router
 from consultant import router as consultant_router
+from hr_consultants import router as hr_consultants_router
 from database import SessionLocal
 from models import User, UserRole, Department
 from dependencies import get_db
@@ -85,4 +86,5 @@ app.include_router(psychiatrist_router)
 app.include_router(admin_router)
 app.include_router(registration_requests_router)
 app.include_router(tasks_router)
-app.include_router(consultant_router) 
+app.include_router(consultant_router)
+app.include_router(hr_consultants_router) 
