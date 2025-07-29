@@ -184,7 +184,9 @@ class ConsultantAvailability(Base):
     consultant = relationship("Consultant", back_populates="availabilities")
 
 class BookingStatus(enum.Enum):
-    scheduled = "scheduled"
+    pending = "pending"  # Waiting for psychiatrist approval
+    approved = "approved"  # Approved by psychiatrist
+    rejected = "rejected"  # Rejected by psychiatrist
     completed = "completed"
     cancelled = "cancelled"
 
@@ -195,9 +197,10 @@ class ConsultantBooking(Base):
     employee_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     booked_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Who made the booking (employee, supervisor, HR)
     booking_date = Column(DateTime, nullable=False)
-    duration_minutes = Column(Integer, default=60)
-    status = Column(Enum(BookingStatus), default=BookingStatus.scheduled)
+    duration_minutes = Column(Integer, default=30)  # Changed to 30 minutes default
+    status = Column(Enum(BookingStatus), default=BookingStatus.pending)  # Changed default to pending
     notes = Column(Text, nullable=True)
+    rejection_reason = Column(Text, nullable=True)  # Added for psychiatrist to provide rejection reason
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

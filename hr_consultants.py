@@ -245,7 +245,7 @@ def update_consultant(consultant_id: int, request: UpdateConsultantRequest, curr
         # Get current bookings for this consultant
         current_bookings = db.query(ConsultantBooking).filter(
             ConsultantBooking.consultant_id == consultant_id,
-            ConsultantBooking.status == BookingStatus.scheduled
+            ConsultantBooking.status == BookingStatus.pending
         ).all()
         
         # Delete existing availabilities
@@ -327,7 +327,7 @@ def delete_consultant(consultant_id: int, current_user: User = Depends(require_r
     # Cancel all scheduled bookings for this consultant
     scheduled_bookings = db.query(ConsultantBooking).filter(
         ConsultantBooking.consultant_id == consultant_id,
-        ConsultantBooking.status == BookingStatus.scheduled
+        ConsultantBooking.status == BookingStatus.pending
     ).all()
     
     cancelled_count = 0
@@ -395,7 +395,7 @@ def get_consultant_available_times(consultant_id: int, date: str, current_user: 
     # Get existing bookings for this consultant on this date
     existing_bookings = db.query(ConsultantBooking).filter(
         ConsultantBooking.consultant_id == consultant_id,
-        ConsultantBooking.status == BookingStatus.scheduled,
+        ConsultantBooking.status == BookingStatus.pending,
         func.date(ConsultantBooking.booking_date) == booking_date
     ).all()
     

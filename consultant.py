@@ -118,7 +118,7 @@ def book_consultation(
     existing_booking = db.query(ConsultantBooking).filter(
         ConsultantBooking.consultant_id == request.consultant_id,
         ConsultantBooking.booking_date == request.booking_date,
-        ConsultantBooking.status == BookingStatus.scheduled
+        ConsultantBooking.status == BookingStatus.pending
     ).first()
     
     if existing_booking:
@@ -131,6 +131,7 @@ def book_consultation(
         booked_by_id=current_user.id,
         booking_date=request.booking_date,
         duration_minutes=request.duration_minutes,
+        status=BookingStatus.pending,
         notes=request.notes
     )
     
@@ -239,7 +240,7 @@ def update_booking(
         existing_booking = db.query(ConsultantBooking).filter(
             ConsultantBooking.consultant_id == booking.consultant_id,
             ConsultantBooking.booking_date == request.booking_date,
-            ConsultantBooking.status == BookingStatus.scheduled,
+            ConsultantBooking.status == BookingStatus.pending,
             ConsultantBooking.id != booking_id
         ).first()
         
@@ -346,7 +347,7 @@ def book_for_employee(
     existing_booking = db.query(ConsultantBooking).filter(
         ConsultantBooking.consultant_id == request.consultant_id,
         ConsultantBooking.booking_date == request.booking_date,
-        ConsultantBooking.status == BookingStatus.scheduled
+        ConsultantBooking.status == BookingStatus.pending
     ).first()
     
     if existing_booking:
@@ -359,6 +360,7 @@ def book_for_employee(
         booked_by_id=current_user.id,
         booking_date=request.booking_date,
         duration_minutes=request.duration_minutes,
+        status=BookingStatus.pending,
         notes=request.notes
     )
     

@@ -865,7 +865,7 @@ def admin_dashboard(current_user: User = Depends(require_role(UserRole.admin)), 
     employee_count = db.query(User).filter(User.role == UserRole.employee.value).count()
     supervisor_count = db.query(User).filter(User.role == UserRole.supervisor.value).count()
     hr_count = db.query(User).filter(User.role == UserRole.hr_manager.value).count()
-    consultant_count = db.query(User).filter(User.role == UserRole.psychiatrist.value).count()
+    consultant_count = db.query(User).filter(User.role == UserRole.consultant.value).count()
     total_users = db.query(User).count()
     department_count = db.query(Department).count()
     team_count = db.query(Team).count()
