@@ -65,7 +65,7 @@ def create_consultant_with_availability(request: CreateConsultantWithAvailabilit
         registration_number=request.registration_number,
         hospital=request.hospital,
         specialization=request.specialization,
-        created_at=datetime.utcnow()
+        created_at=datetime.now()
     )
     
     db.add(consultant)

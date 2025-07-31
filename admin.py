@@ -96,7 +96,7 @@ def create_department(request: CreateDepartmentRequest, current_user: User = Dep
     department = Department(
         name=request.name,
         description=request.description,
-        created_at=datetime.utcnow()
+        created_at=datetime.now()
     )
     
     db.add(department)
@@ -161,7 +161,7 @@ def create_team(request: CreateTeamRequest, current_user: User = Depends(require
         name=request.name,
         description=request.description,
         department_id=request.department_id,
-        created_at=datetime.utcnow()
+        created_at=datetime.now()
     )
     
     db.add(team)
@@ -503,7 +503,7 @@ def create_consultant_with_availability_admin(request: CreateConsultantWithAvail
         registration_number=request.registration_number,
         hospital=request.hospital,
         specialization=request.specialization,
-        created_at=datetime.utcnow()
+        created_at=datetime.now()
     )
     
     db.add(consultant)

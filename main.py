@@ -12,6 +12,7 @@ from tasks import router as tasks_router
 from consultant import router as consultant_router
 from hr_consultants import router as hr_consultants_router
 from hr_psychiatrists import router as hr_psychiatrists_router
+from notification import router as notification_router
 from database import SessionLocal
 from models import User, UserRole, Department
 from dependencies import get_db
@@ -89,4 +90,5 @@ app.include_router(registration_requests_router)
 app.include_router(tasks_router)
 app.include_router(consultant_router)
 app.include_router(hr_consultants_router)
-app.include_router(hr_psychiatrists_router) 
+app.include_router(hr_psychiatrists_router)
+app.include_router(notification_router) 

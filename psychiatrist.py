@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from dependencies import get_current_user, require_role, require_roles, get_db
-from models import User, UserRole, Consultant, ConsultantBooking, BookingStatus
-from pydantic import BaseModel
-from datetime import datetime, timedelta, time
 from sqlalchemy import func
+from models import User, UserRole, Consultant, ConsultantBooking, BookingStatus
+from dependencies import require_roles, require_role, get_db
+from datetime import datetime, timedelta
 from typing import List, Optional
+from pydantic import BaseModel
+from notification_service import NotificationService
 
 router = APIRouter(prefix="/psychiatrist", tags=["psychiatrist"])
 
@@ -198,24 +199,19 @@ def book_psychiatrist(booking_data: BookingRequest, current_user: User = Depends
     if not consultant:
         raise HTTPException(status_code=404, detail="Psychiatrist not found")
     
-    # Parse booking date
+    # Parse booking date - frontend now sends local time directly
     try:
-        # The frontend now sends UTC time, so parse as UTC and convert to local time
-        booking_datetime_utc = datetime.fromisoformat(booking_data.booking_date.replace('Z', '+00:00'))
-        # Convert UTC to local time (assuming server is in local timezone)
-        booking_datetime = booking_datetime_utc.replace(tzinfo=None)
-        print(f"Frontend sent (UTC): {booking_data.booking_date}")
-        print(f"Converted to local: {booking_datetime}")
+        # Parse the local datetime string directly
+        booking_datetime = datetime.fromisoformat(booking_data.booking_date)
+        print(f"Frontend sent (local time): {booking_data.booking_date}")
+        print(f"Parsed as local: {booking_datetime}")
         
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format")
     
     # Check if booking is in the past
     current_datetime = datetime.now()
-    # Ensure both datetimes are timezone-naive for comparison
-    current_datetime_naive = current_datetime.replace(tzinfo=None)
-    booking_datetime_naive = booking_datetime.replace(tzinfo=None)
-    if booking_datetime_naive <= current_datetime_naive:
+    if booking_datetime <= current_datetime:
         raise HTTPException(status_code=400, detail="Cannot book sessions in the past or current time")
     
     # Check if slot is available
@@ -234,13 +230,19 @@ def book_psychiatrist(booking_data: BookingRequest, current_user: User = Depends
         employee_id=current_user.id,
         booked_by_id=current_user.id,
         booking_date=booking_datetime,
-        duration_minutes=30,  # Fixed 30-minute sessions
-        status=BookingStatus.pending,  # Requires psychiatrist approval
+        duration_minutes=30,
+        status=BookingStatus.pending,
         notes=booking_data.notes
     )
     db.add(booking)
     db.commit()
     db.refresh(booking)
+    
+    # Send notifications
+    try:
+        NotificationService.notify_booking_created(db, booking)
+    except Exception as e:
+        print(f"Error sending notification: {e}")
     
     return {
         "message": "Booking request submitted successfully. Waiting for psychiatrist approval.",
@@ -450,6 +452,8 @@ def approve_booking_with_conflict_resolution(booking_id: int, request: ApprovalR
     if booking.status != BookingStatus.pending:
         raise HTTPException(status_code=400, detail="Booking is not pending approval")
     
+    cancelled_count = 0
+    
     if request.status == "approved":
         # Get all other pending bookings for the same time slot
         conflicting_bookings = db.query(ConsultantBooking).filter(
@@ -460,20 +464,40 @@ def approve_booking_with_conflict_resolution(booking_id: int, request: ApprovalR
         ).all()
         
         # Cancel all conflicting bookings
-        cancelled_count = 0
         for conflicting_booking in conflicting_bookings:
             conflicting_booking.status = BookingStatus.cancelled
             conflicting_booking.rejection_reason = f"Automatically cancelled - another request was approved for this time slot"
             cancelled_count += 1
+            
+            # Send cancellation notifications
+            try:
+                NotificationService.notify_booking_cancelled(db, conflicting_booking, "Automatically cancelled - another request was approved for this time slot")
+            except Exception as e:
+                print(f"Error sending cancellation notification: {e}")
         
         # Approve the selected booking
         booking.status = BookingStatus.approved
         message = f"Booking approved successfully. {cancelled_count} conflicting requests were automatically cancelled."
         
+        # Send approval notification
+        try:
+            NotificationService.notify_booking_approved(db, booking)
+        except Exception as e:
+            print(f"Error sending approval notification: {e}")
+        
     elif request.status == "rejected":
+        if not request.rejection_reason:
+            raise HTTPException(status_code=400, detail="Rejection reason is required")
+        
         booking.status = BookingStatus.rejected
         booking.rejection_reason = request.rejection_reason
         message = "Booking rejected"
+        
+        # Send rejection notification
+        try:
+            NotificationService.notify_booking_rejected(db, booking, request.rejection_reason)
+        except Exception as e:
+            print(f"Error sending rejection notification: {e}")
     else:
         raise HTTPException(status_code=400, detail="Invalid status. Use 'approved' or 'rejected'")
     
@@ -502,8 +526,8 @@ def update_psychiatrist_booking(booking_id: int, booking_data: dict, current_use
         raise HTTPException(status_code=400, detail="Can only update pending bookings")
     
     if 'booking_date' in booking_data:
-        booking_datetime_utc = datetime.fromisoformat(booking_data['booking_date'].replace('Z', '+00:00'))
-        booking.booking_date = booking_datetime_utc.replace(tzinfo=None)
+        booking_datetime = datetime.fromisoformat(booking_data['booking_date'])
+        booking.booking_date = booking_datetime
     if 'notes' in booking_data:
         booking.notes = booking_data['notes']
     
@@ -553,6 +577,12 @@ def complete_session(booking_id: int, current_user: User = Depends(require_role(
     booking.status = BookingStatus.completed
     db.commit()
     
+    # Send completion notification
+    try:
+        NotificationService.notify_session_completed(db, booking)
+    except Exception as e:
+        print(f"Error sending completion notification: {e}")
+    
     return {"message": "Session marked as completed", "booking_id": booking.id}
 
 # Book psychiatrist for employee (HR/Supervisor)
@@ -569,10 +599,9 @@ def book_psychiatrist_for_employee(booking_data: BookingRequest, employee_id: in
     if not consultant:
         raise HTTPException(status_code=404, detail="Psychiatrist not found")
     
-    # Parse booking date
+    # Parse booking date - frontend now sends local time directly
     try:
-        booking_datetime_utc = datetime.fromisoformat(booking_data.booking_date.replace('Z', '+00:00'))
-        booking_datetime = booking_datetime_utc.replace(tzinfo=None)
+        booking_datetime = datetime.fromisoformat(booking_data.booking_date)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format")
     
@@ -599,6 +628,12 @@ def book_psychiatrist_for_employee(booking_data: BookingRequest, employee_id: in
     db.add(booking)
     db.commit()
     db.refresh(booking)
+    
+    # Send notifications
+    try:
+        NotificationService.notify_booking_created(db, booking)
+    except Exception as e:
+        print(f"Error sending notification: {e}")
     
     return {
         "message": "Booking request submitted successfully. Waiting for psychiatrist approval.",

@@ -21,6 +21,28 @@ class TaskStatus(enum.Enum):
     pending = "pending"
     completed = "completed"
 
+class NotificationType(enum.Enum):
+    booking_created = "booking_created"
+    booking_approved = "booking_approved"
+    booking_rejected = "booking_rejected"
+    booking_cancelled = "booking_cancelled"
+    session_completed = "session_completed"
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String(200), nullable=False)
+    message = Column(Text, nullable=False)
+    notification_type = Column(Enum(NotificationType), nullable=False)
+    is_read = Column(Boolean, default=False)
+    related_booking_id = Column(Integer, ForeignKey("consultant_bookings.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    related_booking = relationship("ConsultantBooking", foreign_keys=[related_booking_id])
+
 class Task(Base):
     __tablename__ = "tasks"
     id = Column(Integer, primary_key=True, index=True)
@@ -29,8 +51,8 @@ class Task(Base):
     status = Column(Enum(TaskStatus), default=TaskStatus.pending)
     priority = Column(String(20), default="medium")  # low, medium, high
     due_date = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relationships
     employee_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -70,7 +92,7 @@ class UserRegistrationRequest(Base):
     
     # Request Status
     status = Column(Enum(RequestStatus), default=RequestStatus.pending)
-    submitted_at = Column(DateTime, default=datetime.utcnow)
+    submitted_at = Column(DateTime, default=datetime.now)
     reviewed_at = Column(DateTime, nullable=True)
     reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     rejection_reason = Column(Text, nullable=True)
@@ -135,8 +157,8 @@ class StressScore(Base):
     level = Column(String(20), nullable=False)  # low, medium, high
     share_with_supervisor = Column(Boolean, default=False)
     share_with_hr = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     
     employee = relationship("User", back_populates="stress_scores")
 
@@ -201,8 +223,8 @@ class ConsultantBooking(Base):
     status = Column(Enum(BookingStatus), default=BookingStatus.pending)  # Changed default to pending
     notes = Column(Text, nullable=True)
     rejection_reason = Column(Text, nullable=True)  # Added for psychiatrist to provide rejection reason
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relationships
     consultant = relationship("Consultant", foreign_keys=[consultant_id])

@@ -228,9 +228,8 @@ def hr_book_consultant(request: dict, current_user: User = Depends(require_role(
     from models import ConsultantBooking, BookingStatus
     from datetime import datetime
     
-    # Parse booking date
-    booking_datetime_utc = datetime.fromisoformat(request['booking_date'].replace('Z', '+00:00'))
-    booking_datetime = booking_datetime_utc.replace(tzinfo=None)
+    # Parse booking date - frontend now sends local time directly
+    booking_datetime = datetime.fromisoformat(request['booking_date'])
     
     booking = ConsultantBooking(
         consultant_id=request['consultant_id'],
@@ -252,12 +251,11 @@ def hr_book_psychiatrist(request: dict, current_user: User = Depends(require_rol
     from models import ConsultantBooking, BookingStatus
     from datetime import datetime
     
-    # Parse booking date
-    booking_datetime_utc = datetime.fromisoformat(request['booking_date'].replace('Z', '+00:00'))
-    booking_datetime = booking_datetime_utc.replace(tzinfo=None)
+    # Parse booking date - frontend now sends local time directly
+    booking_datetime = datetime.fromisoformat(request['booking_date'])
     
     # Check if booking is in the past
-    current_datetime = datetime.utcnow()
+    current_datetime = datetime.now()
     if booking_datetime <= current_datetime:
         raise HTTPException(status_code=400, detail="Cannot book sessions in the past or current time")
     
@@ -297,12 +295,11 @@ def hr_book_for_employee(request: dict, current_user: User = Depends(require_rol
     from models import ConsultantBooking, BookingStatus
     from datetime import datetime
     
-    # Parse booking date
-    booking_datetime_utc = datetime.fromisoformat(request['booking_date'].replace('Z', '+00:00'))
-    booking_datetime = booking_datetime_utc.replace(tzinfo=None)
+    # Parse booking date - frontend now sends local time directly
+    booking_datetime = datetime.fromisoformat(request['booking_date'])
     
     # Check if booking is in the past
-    current_datetime = datetime.utcnow()
+    current_datetime = datetime.now()
     if booking_datetime <= current_datetime:
         raise HTTPException(status_code=400, detail="Cannot book sessions in the past or current time")
     
@@ -326,12 +323,11 @@ def hr_book_psychiatrist_for_employee(request: dict, current_user: User = Depend
     from models import ConsultantBooking, BookingStatus
     from datetime import datetime
     
-    # Parse booking date
-    booking_datetime_utc = datetime.fromisoformat(request['booking_date'].replace('Z', '+00:00'))
-    booking_datetime = booking_datetime_utc.replace(tzinfo=None)
+    # Parse booking date - frontend now sends local time directly
+    booking_datetime = datetime.fromisoformat(request['booking_date'])
     
     # Check if booking is in the past
-    current_datetime = datetime.utcnow()
+    current_datetime = datetime.now()
     if booking_datetime <= current_datetime:
         raise HTTPException(status_code=400, detail="Cannot book sessions in the past or current time")
     

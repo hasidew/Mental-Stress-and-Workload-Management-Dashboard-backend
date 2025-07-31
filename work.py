@@ -19,7 +19,7 @@ def assign_work(request: WorkAssignRequest, current_user: User = Depends(require
         raise HTTPException(status_code=404, detail="Employee not found")
     assignment = WorkAssignment(
         work_description=request.work_description,
-        assigned_at=datetime.utcnow(),
+        assigned_at=datetime.now(),
         employee_id=employee.id,
         supervisor_id=current_user.id
     )

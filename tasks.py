@@ -124,7 +124,7 @@ def update_task(
     if task_data.due_date is not None:
         setattr(task, 'due_date', task_data.due_date)
     
-    setattr(task, 'updated_at', datetime.utcnow())
+    setattr(task, 'updated_at', datetime.now())
     db.commit()
     db.refresh(task)
     
@@ -177,7 +177,7 @@ def update_task_status(
         raise HTTPException(status_code=400, detail="Status must be 'pending' or 'completed'")
     
     setattr(task, 'status', TaskStatus(status))
-    setattr(task, 'updated_at', datetime.utcnow())
+    setattr(task, 'updated_at', datetime.now())
     db.commit()
     
     return {"message": f"Task status updated to {status}"}
@@ -327,7 +327,7 @@ def supervisor_update_task(
     if task_data.due_date is not None:
         setattr(task, 'due_date', task_data.due_date)
     
-    setattr(task, 'updated_at', datetime.utcnow())
+    setattr(task, 'updated_at', datetime.now())
     db.commit()
     db.refresh(task)
     

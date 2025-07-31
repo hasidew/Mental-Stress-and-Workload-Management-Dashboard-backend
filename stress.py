@@ -112,7 +112,7 @@ def submit_stress_assessment(
             setattr(existing_score, 'level', level)
             setattr(existing_score, 'share_with_supervisor', request.share_with_supervisor)
             setattr(existing_score, 'share_with_hr', request.share_with_hr)
-            setattr(existing_score, 'updated_at', datetime.utcnow())
+            setattr(existing_score, 'updated_at', datetime.now())
             db.commit()
             db.refresh(existing_score)
             
@@ -191,7 +191,7 @@ def update_sharing_preferences(
     
     setattr(stress_score, 'share_with_supervisor', request.share_with_supervisor)
     setattr(stress_score, 'share_with_hr', request.share_with_hr)
-    setattr(stress_score, 'updated_at', datetime.utcnow())
+    setattr(stress_score, 'updated_at', datetime.now())
     db.commit()
     db.refresh(stress_score)
     

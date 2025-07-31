@@ -117,7 +117,7 @@ async def create_psychiatrist_with_availability(psychiatrist_data: CreatePsychia
             registration_number=psychiatrist_data.registration_number,
             hospital=psychiatrist_data.hospital,
             specialization=psychiatrist_data.specialization,
-            created_at=datetime.utcnow()
+            created_at=datetime.now()
         )
         db.add(consultant)
         db.flush()  # Get the ID without committing

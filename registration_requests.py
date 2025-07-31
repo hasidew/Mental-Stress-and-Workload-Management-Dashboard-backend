@@ -213,7 +213,7 @@ def review_registration_request(
             hashed_password=registration_request.password,
             role=user_role,
             name=f"{registration_request.first_name} {registration_request.last_name}",
-            age=(datetime.utcnow() - registration_request.birthday).days // 365,
+            age=(datetime.now() - registration_request.birthday).days // 365,
             sex=registration_request.gender
         )
         
@@ -232,7 +232,7 @@ def review_registration_request(
         
         # Update request status
         registration_request.status = RequestStatus.approved
-        registration_request.reviewed_at = datetime.utcnow()
+        registration_request.reviewed_at = datetime.now()
         registration_request.reviewed_by = current_user.id
         
         db.commit()
@@ -244,7 +244,7 @@ def review_registration_request(
     
     elif review_data.action == "reject":
         registration_request.status = RequestStatus.rejected
-        registration_request.reviewed_at = datetime.utcnow()
+        registration_request.reviewed_at = datetime.now()
         registration_request.reviewed_by = current_user.id
         registration_request.rejection_reason = review_data.rejection_reason
         
