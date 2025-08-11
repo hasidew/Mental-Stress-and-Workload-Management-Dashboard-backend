@@ -137,10 +137,12 @@ def get_psychiatrist_timetable(psychiatrist_id: int, date: str, current_user: Us
                 
             slot_start_datetime = datetime.combine(target_date, current_time)
             
-            # Check if this slot is already booked by comparing the time component
+            # Check if this slot is already booked by comparing the time component AND the date
             existing_booking = db.query(ConsultantBooking).filter(
                 ConsultantBooking.consultant_id == psychiatrist_id,
                 func.time(ConsultantBooking.booking_date) == current_time,
+                ConsultantBooking.booking_date >= datetime.combine(target_date, datetime.min.time()),
+                ConsultantBooking.booking_date < datetime.combine(target_date + timedelta(days=1), datetime.min.time()),
                 ConsultantBooking.status.in_([BookingStatus.pending, BookingStatus.approved, BookingStatus.completed])
             ).first()
             
@@ -589,10 +591,14 @@ def complete_session(booking_id: int, current_user: User = Depends(require_role(
 @router.post("/book-for-employee")
 def book_psychiatrist_for_employee(booking_data: BookingRequest, employee_id: int, current_user: User = Depends(require_roles([UserRole.supervisor, UserRole.hr_manager])), db: Session = Depends(get_db)):
     """Book a psychiatrist appointment for an employee"""
-    # Validate employee exists
+    # Validate employee exists and is not a psychiatrist
     employee = db.query(User).filter(User.id == employee_id).first()
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
+    
+    # Prevent booking sessions for psychiatrists
+    if employee.role == UserRole.psychiatrist:
+        raise HTTPException(status_code=400, detail="Cannot book psychiatrist sessions for psychiatrists")
     
     # Validate psychiatrist exists
     consultant = db.query(Consultant).filter(Consultant.id == booking_data.psychiatrist_id).first()

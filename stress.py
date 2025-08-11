@@ -10,14 +10,18 @@ router = APIRouter(prefix="/stress", tags=["stress"])
 
 # Pydantic models
 class StressAssessmentRequest(BaseModel):
-    answers: List[int]  # List of answers (1-5 scale for each question)
+    answers: List[int]  # List of answers (0-4 scale for each question)
     share_with_supervisor: bool = False
     share_with_hr: bool = False
 
 class StressScoreResponse(BaseModel):
     id: int
-    score: int
+    score: float
     level: str
+    pss_score: float
+    normalized_pss: float
+    workload_stress_score: float
+    total_hours_worked: float
     share_with_supervisor: bool
     share_with_hr: bool
     created_at: datetime
@@ -28,60 +32,157 @@ class UpdateSharingRequest(BaseModel):
     share_with_supervisor: Optional[bool] = None
     share_with_hr: Optional[bool] = None
 
-# Stress assessment questions (PSS - Perceived Stress Scale)
+# Stress assessment questions (PSS-10 - Perceived Stress Scale)
+# Updated for 24-hour timeframe and 0-4 scale
 STRESS_QUESTIONS = [
-    "In the last month, how often have you been upset because of something that happened unexpectedly?",
-    "In the last month, how often have you felt that you were unable to control the important things in your life?",
-    "In the last month, how often have you felt nervous and 'stressed'?",
-    "In the last month, how often have you felt confident about your ability to handle your personal problems?",
-    "In the last month, how often have you felt that things were going your way?",
-    "In the last month, how often have you found that you could not cope with all the things that you had to do?",
-    "In the last month, how often have you been able to control irritations in your life?",
-    "In the last month, how often have you felt that you were on top of things?",
-    "In the last month, how often have you been angered because of things that happened that were outside of your control?",
-    "In the last month, how often have you felt difficulties were piling up so high that you could not overcome them?"
+    "During the past 24 hours, how often did you feel like this? Something happened that surprised or upset you.",
+    "During the past 24 hours, how often did you feel like this? You felt like you couldn't control important things in your life.",
+    "During the past 24 hours, how often did you feel like this? You felt nervous or stressed.",
+    "During the past 24 hours, how often did you feel like this? You felt sure you could solve your problems.",
+    "During the past 24 hours, how often did you feel like this? Things were going well for you.",
+    "During the past 24 hours, how often did you feel like this? You had too many things to do and felt you couldn't manage.",
+    "During the past 24 hours, how often did you feel like this? You were able to stay calm when something annoyed you.",
+    "During the past 24 hours, how often did you feel like this? You felt in control of your day.",
+    "During the past 24 hours, how often did you feel like this? You got angry about things you couldn't control.",
+    "During the past 24 hours, how often did you feel like this? You felt like problems were too much for you."
 ]
 
-def calculate_stress_score(answers: List[int]) -> tuple[int, str]:
+def calculate_pss_score(answers: List[int]) -> tuple[float, float]:
     """
-    Calculate stress score based on PSS (Perceived Stress Scale)
+    Calculate PSS score based on PSS-10 (Perceived Stress Scale)
     Reverse scoring for questions 4, 5, 7, 8 (positive questions)
+    Scale: 0 = Never → 4 = Very Often
     """
     if len(answers) != 10:
         raise HTTPException(status_code=400, detail="Must provide exactly 10 answers")
     
-    # Validate answers (1-5 scale)
+    # Validate answers (0-4 scale)
     for answer in answers:
-        if not (1 <= answer <= 5):
-            raise HTTPException(status_code=400, detail="Answers must be between 1 and 5")
+        if not (0 <= answer <= 4):
+            raise HTTPException(status_code=400, detail="Answers must be between 0 and 4")
     
-    # Reverse scoring for positive questions (4, 5, 7, 8)
-    positive_questions = [3, 4, 6, 7]  # 0-indexed
+    # Reverse scoring for positive questions (4, 5, 7, 8) - 0-indexed
+    positive_questions = [3, 4, 6, 7]  # Q4, Q5, Q7, Q8
     total_score = 0
     
     for i, answer in enumerate(answers):
         if i in positive_questions:
-            # Reverse scoring: 1->5, 2->4, 3->3, 4->2, 5->1
-            total_score += (6 - answer)
+            # Reverse scoring: 0->4, 1->3, 2->2, 3->1, 4->0
+            reversed_score = 4 - answer
+            total_score += reversed_score
         else:
             total_score += answer
     
-    # Determine stress level
-    if total_score <= 13:
-        level = "low"
-    elif total_score <= 26:
-        level = "medium"
-    else:
-        level = "high"
+    # Normalize to 0-10 scale
+    normalized_pss = (total_score / 40) * 10
     
-    return total_score, level
+    return total_score, normalized_pss
+
+def calculate_workload_stress(db: Session, employee_id: int) -> tuple[float, float, dict]:
+    """
+    Calculate workload stress based on FTE method and task analysis
+    Returns: (workload_stress_score, total_hours_worked, workload_details)
+    """
+    from datetime import datetime, timedelta
+    from models import Task
+    
+    # Get tasks from the past 24 hours
+    yesterday = datetime.now() - timedelta(days=1)
+    
+    # Get all tasks for the employee from the past 24 hours
+    tasks = db.query(Task).filter(
+        Task.employee_id == employee_id,
+        Task.created_at >= yesterday
+    ).all()
+    
+    total_hours_worked = 0.0
+    high_priority_tasks = 0
+    overdue_tasks = 0
+    pending_tasks = 0
+    total_tasks = len(tasks)
+    
+    for task in tasks:
+        # Calculate hours worked from task duration
+        if task.duration:
+            # Convert minutes to hours
+            total_hours_worked += task.duration / 60
+        
+        # Count high priority tasks
+        if task.priority == "high":
+            high_priority_tasks += 1
+        
+        # Count pending tasks
+        if task.status.value == "pending":
+            pending_tasks += 1
+        
+        # Check for overdue tasks (due_date < now and status is pending)
+        if task.due_date and task.due_date < datetime.now() and task.status.value == "pending":
+            overdue_tasks += 1
+    
+    # FTE standard is 7.22 hours
+    fte_standard = 7.22
+    
+    # Base workload stress score based on hours worked
+    if total_hours_worked <= fte_standard:
+        base_workload_stress = 0.0
+    elif total_hours_worked <= 9.0:
+        base_workload_stress = 0.5
+    elif total_hours_worked <= 12.0:
+        base_workload_stress = 1.0
+    else:
+        base_workload_stress = 2.0
+    
+    # Additional stress factors
+    priority_stress = min(high_priority_tasks * 0.1, 0.5)  # Max 0.5 for high priority tasks
+    overdue_stress = min(overdue_tasks * 0.2, 0.5)  # Max 0.5 for overdue tasks
+    pending_stress = min(pending_tasks * 0.05, 0.3)  # Max 0.3 for pending tasks
+    
+    # Calculate total workload stress (capped at 2.0)
+    total_workload_stress = min(base_workload_stress + priority_stress + overdue_stress + pending_stress, 2.0)
+    
+
+    
+    # Prepare workload details for display
+    workload_details = {
+        "total_tasks": total_tasks,
+        "high_priority_tasks": high_priority_tasks,
+        "overdue_tasks": overdue_tasks,
+        "pending_tasks": pending_tasks,
+        "completed_tasks": total_tasks - pending_tasks,
+        "fte_standard": fte_standard,
+        "base_workload_stress": base_workload_stress,
+        "priority_stress": priority_stress,
+        "overdue_stress": overdue_stress,
+        "pending_stress": pending_stress
+    }
+    
+    return total_workload_stress, total_hours_worked, workload_details
+
+def calculate_final_stress_score(normalized_pss: float, workload_stress_score: float) -> tuple[float, str]:
+    """
+    Calculate final work stress score using the formula:
+    final_stress_score = (normalized_pss × 0.6) + (workload_stress_score × 0.4)
+    """
+    final_stress_score = (normalized_pss * 0.6) + (workload_stress_score * 0.4)
+    
+    # Determine stress level based on thresholds
+    if final_stress_score <= 3.0:
+        level = "low"
+    elif final_stress_score <= 6.0:
+        level = "moderate"
+    elif final_stress_score <= 8.5:
+        level = "high"
+    else:
+        level = "critical"
+    
+    return final_stress_score, level
 
 @router.get("/questions")
 def get_stress_questions():
     """Get stress assessment questions"""
     return {
         "questions": STRESS_QUESTIONS,
-        "instructions": "Rate how often you have felt or thought a certain way in the last month: 1=Never, 2=Almost Never, 3=Sometimes, 4=Fairly Often, 5=Very Often"
+        "instructions": "Rate how often you have felt or thought a certain way during the past 24 hours: 0=Never, 1=Almost Never, 2=Sometimes, 3=Often, 4=Very Often"
     }
 
 @router.post("/submit-assessment")
@@ -90,9 +191,16 @@ def submit_stress_assessment(
     current_user: User = Depends(require_roles([UserRole.employee, UserRole.supervisor, UserRole.hr_manager])),
     db: Session = Depends(get_db)
 ):
-    """Submit stress assessment and calculate score"""
+    """Submit stress assessment and calculate score using new Work Stress Calculation method"""
     try:
-        score, level = calculate_stress_score(request.answers)
+        # Calculate PSS score
+        pss_score, normalized_pss = calculate_pss_score(request.answers)
+        
+        # Calculate workload stress
+        workload_stress_score, total_hours_worked, workload_details = calculate_workload_stress(db, current_user.id)
+        
+        # Calculate final stress score
+        final_score, level = calculate_final_stress_score(normalized_pss, workload_stress_score)
         
         # For supervisors, force share_with_supervisor to False
         if current_user.role == UserRole.supervisor:
@@ -108,8 +216,12 @@ def submit_stress_assessment(
         
         if existing_score:
             # Update existing score
-            setattr(existing_score, 'score', score)
+            setattr(existing_score, 'score', final_score)
             setattr(existing_score, 'level', level)
+            setattr(existing_score, 'pss_score', pss_score)
+            setattr(existing_score, 'normalized_pss', normalized_pss)
+            setattr(existing_score, 'workload_stress_score', workload_stress_score)
+            setattr(existing_score, 'total_hours_worked', total_hours_worked)
             setattr(existing_score, 'share_with_supervisor', request.share_with_supervisor)
             setattr(existing_score, 'share_with_hr', request.share_with_hr)
             setattr(existing_score, 'updated_at', datetime.now())
@@ -118,16 +230,24 @@ def submit_stress_assessment(
             
             return {
                 "message": "Stress assessment updated successfully",
-                "score": score,
+                "score": final_score,
                 "level": level,
+                "pss_score": pss_score,
+                "normalized_pss": normalized_pss,
+                "workload_stress_score": workload_stress_score,
+                "total_hours_worked": total_hours_worked,
                 "id": existing_score.id
             }
         else:
             # Create new stress score
             stress_score = StressScore(
                 employee_id=current_user.id,
-                score=score,
+                score=final_score,
                 level=level,
+                pss_score=pss_score,
+                normalized_pss=normalized_pss,
+                workload_stress_score=workload_stress_score,
+                total_hours_worked=total_hours_worked,
                 share_with_supervisor=request.share_with_supervisor,
                 share_with_hr=request.share_with_hr
             )
@@ -137,8 +257,12 @@ def submit_stress_assessment(
             
             return {
                 "message": "Stress assessment submitted successfully",
-                "score": score,
+                "score": final_score,
                 "level": level,
+                "pss_score": pss_score,
+                "normalized_pss": normalized_pss,
+                "workload_stress_score": workload_stress_score,
+                "total_hours_worked": total_hours_worked,
                 "id": stress_score.id
             }
             
@@ -162,11 +286,27 @@ def get_my_stress_score(
         "id": stress_score.id,
         "score": stress_score.score,
         "level": stress_score.level,
+        "pss_score": stress_score.pss_score,
+        "normalized_pss": stress_score.normalized_pss,
+        "workload_stress_score": stress_score.workload_stress_score,
+        "total_hours_worked": stress_score.total_hours_worked,
         "share_with_supervisor": stress_score.share_with_supervisor,
         "share_with_hr": stress_score.share_with_hr,
         "created_at": stress_score.created_at,
         "updated_at": stress_score.updated_at
     }
+
+@router.get("/workload-details")
+def get_workload_details(
+    current_user: User = Depends(require_roles([UserRole.employee, UserRole.supervisor, UserRole.hr_manager])),
+    db: Session = Depends(get_db)
+):
+    """Get detailed workload information for current user"""
+    try:
+        _, _, workload_details = calculate_workload_stress(db, current_user.id)
+        return workload_details
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error calculating workload: {str(e)}")
 
 @router.put("/update-sharing")
 def update_sharing_preferences(

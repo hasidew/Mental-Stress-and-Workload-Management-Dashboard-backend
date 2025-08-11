@@ -14,6 +14,7 @@ class TaskCreate(BaseModel):
     title: str
     description: Optional[str] = None
     priority: str = "medium"  # low, medium, high
+    duration: Optional[int] = None  # Duration in minutes
     due_date: Optional[datetime] = None
 
 class TaskUpdate(BaseModel):
@@ -21,6 +22,7 @@ class TaskUpdate(BaseModel):
     description: Optional[str] = None
     status: Optional[str] = None  # pending, completed
     priority: Optional[str] = None  # low, medium, high
+    duration: Optional[int] = None  # Duration in minutes
     due_date: Optional[datetime] = None
 
 class TaskResponse(BaseModel):
@@ -29,6 +31,7 @@ class TaskResponse(BaseModel):
     description: Optional[str] = None
     status: str
     priority: str
+    duration: Optional[int] = None  # Duration in minutes
     due_date: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
@@ -49,6 +52,7 @@ def create_task(
         title=task_data.title,
         description=task_data.description,
         priority=task_data.priority,
+        duration=task_data.duration,
         due_date=task_data.due_date,
         employee_id=current_user.id,
         assigned_by_id=current_user.id  # Self-assigned
@@ -64,6 +68,7 @@ def create_task(
         "description": task.description,
         "status": task.status.value,
         "priority": task.priority,
+        "duration": task.duration,
         "due_date": task.due_date,
         "created_at": task.created_at,
         "updated_at": task.updated_at,
@@ -88,6 +93,7 @@ def get_my_tasks(
             "description": task.description,
             "status": task.status.value,
             "priority": task.priority,
+            "duration": task.duration,
             "due_date": task.due_date,
             "created_at": task.created_at,
             "updated_at": task.updated_at,
@@ -121,6 +127,9 @@ def update_task(
         setattr(task, 'status', TaskStatus(task_data.status))
     if task_data.priority is not None:
         setattr(task, 'priority', task_data.priority)
+
+    if task_data.duration is not None:
+        setattr(task, 'duration', task_data.duration)
     if task_data.due_date is not None:
         setattr(task, 'due_date', task_data.due_date)
     
@@ -134,6 +143,7 @@ def update_task(
         "description": task.description,
         "status": task.status.value,
         "priority": task.priority,
+        "duration": task.duration,
         "due_date": task.due_date,
         "created_at": task.created_at,
         "updated_at": task.updated_at,
@@ -200,6 +210,7 @@ def get_task(
         "description": task.description,
         "status": task.status.value,
         "priority": task.priority,
+        "duration": task.duration,
         "due_date": task.due_date,
         "created_at": task.created_at,
         "updated_at": task.updated_at,
@@ -234,6 +245,7 @@ def supervisor_create_task(
         title=task_data.title,
         description=task_data.description,
         priority=task_data.priority,
+        duration=task_data.duration,
         due_date=task_data.due_date,
         employee_id=employee_id,
         assigned_by_id=current_user.id  # Assigned by supervisor
@@ -249,6 +261,7 @@ def supervisor_create_task(
         "description": task.description,
         "status": task.status.value,
         "priority": task.priority,
+        "duration": task.duration,
         "due_date": task.due_date,
         "created_at": task.created_at,
         "updated_at": task.updated_at,
@@ -286,6 +299,7 @@ def supervisor_get_team_tasks(
             "description": task.description,
             "status": task.status.value,
             "priority": task.priority,
+            "duration": task.duration,
             "due_date": task.due_date,
             "created_at": task.created_at,
             "updated_at": task.updated_at,
@@ -324,6 +338,9 @@ def supervisor_update_task(
         setattr(task, 'status', TaskStatus(task_data.status))
     if task_data.priority is not None:
         setattr(task, 'priority', task_data.priority)
+
+    if task_data.duration is not None:
+        setattr(task, 'duration', task_data.duration)
     if task_data.due_date is not None:
         setattr(task, 'due_date', task_data.due_date)
     
@@ -341,6 +358,7 @@ def supervisor_update_task(
         "description": task.description,
         "status": task.status.value,
         "priority": task.priority,
+        "duration": task.duration,
         "due_date": task.due_date,
         "created_at": task.created_at,
         "updated_at": task.updated_at,

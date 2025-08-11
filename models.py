@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum, Text, Boolean, Time
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum, Text, Boolean, Time, Float
 from sqlalchemy.orm import relationship
 from database import Base
 import enum
@@ -50,6 +50,7 @@ class Task(Base):
     description = Column(Text, nullable=True)
     status = Column(Enum(TaskStatus), default=TaskStatus.pending)
     priority = Column(String(20), default="medium")  # low, medium, high
+    duration = Column(Integer, nullable=True)  # Duration in minutes
     due_date = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
@@ -153,8 +154,12 @@ class StressScore(Base):
     __tablename__ = "stress_scores"
     id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    score = Column(Integer, nullable=False)
-    level = Column(String(20), nullable=False)  # low, medium, high
+    score = Column(Float, nullable=False)  # Changed to Float for decimal scores (0-10 scale)
+    level = Column(String(20), nullable=False)  # low, moderate, high, critical
+    pss_score = Column(Float, nullable=False)  # Raw PSS score (0-40)
+    normalized_pss = Column(Float, nullable=False)  # Normalized PSS (0-10)
+    workload_stress_score = Column(Float, nullable=False)  # Workload stress (0-2)
+    total_hours_worked = Column(Float, nullable=False)  # Total hours worked
     share_with_supervisor = Column(Boolean, default=False)
     share_with_hr = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.now)

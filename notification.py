@@ -17,7 +17,7 @@ class NotificationResponse(BaseModel):
     created_at: str
 
 @router.get("/my-notifications")
-def get_my_notifications(current_user: User = Depends(require_roles([UserRole.employee, UserRole.supervisor, UserRole.hr_manager, UserRole.psychiatrist])), db: Session = Depends(get_db)):
+def get_my_notifications(current_user: User = Depends(require_roles([UserRole.employee, UserRole.supervisor, UserRole.hr_manager, UserRole.psychiatrist, UserRole.admin])), db: Session = Depends(get_db)):
     """Get current user's notifications"""
     notifications = db.query(Notification).filter(
         Notification.user_id == current_user.id
@@ -37,7 +37,7 @@ def get_my_notifications(current_user: User = Depends(require_roles([UserRole.em
     ]
 
 @router.get("/my-unread-count")
-def get_unread_count(current_user: User = Depends(require_roles([UserRole.employee, UserRole.supervisor, UserRole.hr_manager, UserRole.psychiatrist])), db: Session = Depends(get_db)):
+def get_unread_count(current_user: User = Depends(require_roles([UserRole.employee, UserRole.supervisor, UserRole.hr_manager, UserRole.psychiatrist, UserRole.admin])), db: Session = Depends(get_db)):
     """Get count of unread notifications for current user"""
     count = db.query(Notification).filter(
         Notification.user_id == current_user.id,
@@ -47,7 +47,7 @@ def get_unread_count(current_user: User = Depends(require_roles([UserRole.employ
     return {"unread_count": count}
 
 @router.put("/{notification_id}/mark-read")
-def mark_notification_read(notification_id: int, current_user: User = Depends(require_roles([UserRole.employee, UserRole.supervisor, UserRole.hr_manager, UserRole.psychiatrist])), db: Session = Depends(get_db)):
+def mark_notification_read(notification_id: int, current_user: User = Depends(require_roles([UserRole.employee, UserRole.supervisor, UserRole.hr_manager, UserRole.psychiatrist, UserRole.admin])), db: Session = Depends(get_db)):
     """Mark a notification as read"""
     notification = db.query(Notification).filter(
         Notification.id == notification_id,
@@ -63,7 +63,7 @@ def mark_notification_read(notification_id: int, current_user: User = Depends(re
     return {"message": "Notification marked as read"}
 
 @router.put("/mark-all-read")
-def mark_all_notifications_read(current_user: User = Depends(require_roles([UserRole.employee, UserRole.supervisor, UserRole.hr_manager, UserRole.psychiatrist])), db: Session = Depends(get_db)):
+def mark_all_notifications_read(current_user: User = Depends(require_roles([UserRole.employee, UserRole.supervisor, UserRole.hr_manager, UserRole.psychiatrist, UserRole.admin])), db: Session = Depends(get_db)):
     """Mark all notifications as read for current user"""
     db.query(Notification).filter(
         Notification.user_id == current_user.id,

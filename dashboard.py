@@ -113,8 +113,26 @@ def hr_dashboard(current_user: User = Depends(require_role(UserRole.hr_manager))
         
         return {
             "user": current_user.username,
-            "employees": [e.username for e in employees],
-            "supervisors": [s.username for s in supervisors],
+            "employees": [
+                {
+                    "id": e.id,
+                    "username": e.username,
+                    "name": e.name or e.username,
+                    "email": e.email,
+                    "department": e.department.name if e.department else None,
+                    "team": e.team.name if e.team else None
+                } for e in employees
+            ],
+            "supervisors": [
+                {
+                    "id": s.id,
+                    "username": s.username,
+                    "name": s.name or s.username,
+                    "email": s.email,
+                    "department": s.department.name if s.department else None,
+                    "team": s.team.name if s.team else None
+                } for s in supervisors
+            ],
             "psychiatrists": [p.username for p in psychiatrists],
             "stress_scores_shared_with_hr": [
                 {
