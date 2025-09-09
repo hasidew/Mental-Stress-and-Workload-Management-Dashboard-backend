@@ -45,6 +45,8 @@ class UserLogin(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    role: str
+    username: str
 
 # Utility functions
 def get_password_hash(password):
@@ -76,7 +78,7 @@ def register_admin(user: AdminCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
     access_token = create_access_token(data={"sub": db_user.username, "role": db_user.role.value})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "role": db_user.role.value, "username": db_user.username}
 
 # Registration endpoint
 @auth_router.post("/register", response_model=Token)
@@ -94,7 +96,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
     access_token = create_access_token(data={"sub": db_user.username, "role": db_user.role.value})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "role": db_user.role.value, "username": db_user.username}
 
 # Login endpoint
 @auth_router.post("/login", response_model=Token)
@@ -103,7 +105,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     if not db_user or not verify_password(user.password, db_user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     access_token = create_access_token(data={"sub": db_user.username, "role": db_user.role.value})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "role": db_user.role.value, "username": db_user.username}
 
 # Token refresh endpoint
 @auth_router.post("/refresh", response_model=Token)
@@ -116,4 +118,4 @@ def refresh_token(current_user: User = Depends(get_current_user), db: Session = 
     
     # Create new token with current role
     access_token = create_access_token(data={"sub": db_user.username, "role": db_user.role.value})
-    return {"access_token": access_token, "token_type": "bearer"} 
+    return {"access_token": access_token, "token_type": "bearer", "role": db_user.role.value, "username": db_user.username} 

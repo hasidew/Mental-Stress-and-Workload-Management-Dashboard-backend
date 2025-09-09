@@ -27,6 +27,11 @@ class NotificationType(enum.Enum):
     booking_rejected = "booking_rejected"
     booking_cancelled = "booking_cancelled"
     session_completed = "session_completed"
+    task_assigned = "task_assigned"
+    task_completed = "task_completed"
+    task_overdue = "task_overdue"
+    stress_score_updated = "stress_score_updated"
+    stress_score_high = "stress_score_high"
 
 class Notification(Base):
     __tablename__ = "notifications"
@@ -149,6 +154,7 @@ class User(Base):
     assigned_works = relationship("WorkAssignment", back_populates="employee", foreign_keys='WorkAssignment.employee_id')
     supervisor_works = relationship("WorkAssignment", back_populates="supervisor", foreign_keys='WorkAssignment.supervisor_id')
     tasks = relationship("Task", back_populates="employee", foreign_keys="Task.employee_id")
+    chat_sessions = relationship("ChatSession", back_populates="user")
 
 class StressScore(Base):
     __tablename__ = "stress_scores"
@@ -234,4 +240,29 @@ class ConsultantBooking(Base):
     # Relationships
     consultant = relationship("Consultant", foreign_keys=[consultant_id])
     employee = relationship("User", foreign_keys=[employee_id])
-    booked_by = relationship("User", foreign_keys=[booked_by_id]) 
+    booked_by = relationship("User", foreign_keys=[booked_by_id])
+
+# Chat Models
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+    id = Column(String(36), primary_key=True, index=True)  # UUID string
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    # Relationships
+    user = relationship("User", back_populates="chat_sessions")
+    messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(36), ForeignKey("chat_sessions.id"), nullable=False)
+    role = Column(String(20), nullable=False)  # "user" or "assistant"
+    content = Column(Text, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    timestamp = Column(DateTime, default=datetime.now)
+    
+    # Relationships
+    session = relationship("ChatSession", back_populates="messages")
+    user = relationship("User", foreign_keys=[user_id]) 

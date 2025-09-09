@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from models import Notification, NotificationType, User, ConsultantBooking, UserRole
+from models import Notification, NotificationType, User, ConsultantBooking, UserRole, Task
 from datetime import datetime
 
 class NotificationService:
@@ -148,4 +148,71 @@ class NotificationService:
                 message=f"The session you booked for {booking.employee.name} on {booking.booking_date.strftime('%Y-%m-%d %H:%M')} has been marked as completed",
                 notification_type=NotificationType.session_completed,
                 booking_id=booking.id
+            )
+
+    @staticmethod
+    def notify_task_assigned(db: Session, task: Task):
+        """Notify employee when a task is assigned"""
+        NotificationService.create_notification(
+            db=db,
+            user_id=task.employee_id,
+            title="New Task Assigned",
+            message=f"You have been assigned a new task: {task.title}",
+            notification_type=NotificationType.task_assigned
+        )
+
+    @staticmethod
+    def notify_task_completed(db: Session, task: Task):
+        """Notify supervisor when a task is completed"""
+        if task.assigned_by_id:
+            NotificationService.create_notification(
+                db=db,
+                user_id=task.assigned_by_id,
+                title="Task Completed",
+                message=f"Task '{task.title}' has been completed by {task.employee.name}",
+                notification_type=NotificationType.task_completed
+            )
+
+    @staticmethod
+    def notify_task_overdue(db: Session, task: Task):
+        """Notify employee when a task is overdue"""
+        NotificationService.create_notification(
+            db=db,
+            user_id=task.employee_id,
+            title="Task Overdue",
+            message=f"Your task '{task.title}' is overdue. Please complete it as soon as possible.",
+            notification_type=NotificationType.task_overdue
+        )
+
+    @staticmethod
+    def notify_stress_score_updated(db: Session, user_id: int, score: int):
+        """Notify when a stress score is updated"""
+        NotificationService.create_notification(
+            db=db,
+            user_id=user_id,
+            title="Stress Score Updated",
+            message=f"Your stress score has been updated to {score}",
+            notification_type=NotificationType.stress_score_updated
+        )
+
+    @staticmethod
+    def notify_stress_score_high(db: Session, user_id: int, score: int, supervisor_id: int = None):
+        """Notify when a stress score is high (above threshold)"""
+        # Notify the employee
+        NotificationService.create_notification(
+            db=db,
+            user_id=user_id,
+            title="High Stress Level Detected",
+            message=f"Your stress score is {score}, which indicates high stress. Consider booking a session with a psychiatrist.",
+            notification_type=NotificationType.stress_score_high
+        )
+        
+        # Notify supervisor if available
+        if supervisor_id:
+            NotificationService.create_notification(
+                db=db,
+                user_id=supervisor_id,
+                title="Team Member High Stress",
+                message=f"A team member has a high stress score of {score}. Please check on their well-being.",
+                notification_type=NotificationType.stress_score_high
             ) 

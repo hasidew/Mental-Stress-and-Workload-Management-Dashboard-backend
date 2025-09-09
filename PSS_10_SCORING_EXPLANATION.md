@@ -52,7 +52,7 @@ Negative Questions: 0 + 0 + 0 + 0 + 0 + 0 = 0 points
 Positive Questions: 4 + 4 + 4 + 4 = 16 points (reversed)
 Total PSS: 16/40
 Normalized: (16/40) × 10 = 4.0/10
-Final Score: (4.0 × 0.6) + (workload × 0.4) = 2.4 + workload
+Final Score: (4.0 × 0.7) + (workload × 0.3) = 2.8 + workload
 Stress Level: Low (≤3.0) or Moderate (4-6)
 ```
 
@@ -62,7 +62,7 @@ Negative Questions: 4 + 4 + 4 + 4 + 4 + 4 = 24 points
 Positive Questions: 0 + 0 + 0 + 0 = 0 points (reversed)
 Total PSS: 24/40
 Normalized: (24/40) × 10 = 6.0/10
-Final Score: (6.0 × 0.6) + (workload × 0.4) = 3.6 + workload
+Final Score: (6.0 × 0.7) + (workload × 0.3) = 4.2 + workload
 Stress Level: Moderate (4-6) or High (7-8.5)
 ```
 
@@ -72,7 +72,7 @@ Negative Questions: 2 + 2 + 2 + 2 + 2 + 2 = 12 points
 Positive Questions: 2 + 2 + 2 + 2 = 8 points (reversed)
 Total PSS: 20/40
 Normalized: (20/40) × 10 = 5.0/10
-Final Score: (5.0 × 0.6) + (workload × 0.4) = 3.0 + workload
+Final Score: (5.0 × 0.7) + (workload × 0.3) = 3.5 + workload
 Stress Level: Low (≤3.0) or Moderate (4-6)
 ```
 
@@ -106,13 +106,13 @@ The PSS-10 is **intentionally designed** so that the maximum possible score is *
 ## Final Stress Score Formula
 
 ```
-Final Score = (Normalized PSS × 0.6) + (Workload Stress × 0.4)
+Final Score = (Normalized PSS × 0.7) + (Normalized Workload × 0.3)
 ```
 
 Where:
 - **Normalized PSS**: Your psychological stress (0-10)
-- **Workload Stress**: Your task-based stress (0-2)
-- **Final Score**: Combined stress level (0-10)
+- **Normalized Workload**: Your workload stress (0-10)
+- **Weights**: PSS has 70% influence, Workload has 30% influence
 
 ## Stress Level Thresholds
 

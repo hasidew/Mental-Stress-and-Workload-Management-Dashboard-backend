@@ -81,7 +81,7 @@ def calculate_pss_score(answers: List[int]) -> tuple[float, float]:
 def calculate_workload_stress(db: Session, employee_id: int) -> tuple[float, float, dict]:
     """
     Calculate workload stress based on FTE method and task analysis
-    Returns: (workload_stress_score, total_hours_worked, workload_details)
+    Returns: (normalized_workload_stress, total_hours_worked, workload_details)
     """
     from datetime import datetime, timedelta
     from models import Task
@@ -123,14 +123,14 @@ def calculate_workload_stress(db: Session, employee_id: int) -> tuple[float, flo
     fte_standard = 7.22
     
     # Base workload stress score based on hours worked
-    if total_hours_worked <= fte_standard:
-        base_workload_stress = 0.0
-    elif total_hours_worked <= 9.0:
-        base_workload_stress = 0.5
-    elif total_hours_worked <= 12.0:
-        base_workload_stress = 1.0
-    else:
-        base_workload_stress = 2.0
+    if total_hours_worked < 7.22:
+        raw_workload_score = 0.0
+    elif total_hours_worked >= 7.23 and total_hours_worked <= 9.0:
+        raw_workload_score = 0.5
+    elif total_hours_worked >= 9.01 and total_hours_worked <= 11.99:
+        raw_workload_score = 1.0
+    else:  # >= 12.0
+        raw_workload_score = 2.0
     
     # Additional stress factors
     priority_stress = min(high_priority_tasks * 0.1, 0.5)  # Max 0.5 for high priority tasks
@@ -138,9 +138,10 @@ def calculate_workload_stress(db: Session, employee_id: int) -> tuple[float, flo
     pending_stress = min(pending_tasks * 0.05, 0.3)  # Max 0.3 for pending tasks
     
     # Calculate total workload stress (capped at 2.0)
-    total_workload_stress = min(base_workload_stress + priority_stress + overdue_stress + pending_stress, 2.0)
+    total_workload_stress = min(raw_workload_score + priority_stress + overdue_stress + pending_stress, 2.0)
     
-
+    # Normalize workload stress to 0-10 scale
+    normalized_workload_stress = (total_workload_stress / 2.0) * 10
     
     # Prepare workload details for display
     workload_details = {
@@ -150,20 +151,22 @@ def calculate_workload_stress(db: Session, employee_id: int) -> tuple[float, flo
         "pending_tasks": pending_tasks,
         "completed_tasks": total_tasks - pending_tasks,
         "fte_standard": fte_standard,
-        "base_workload_stress": base_workload_stress,
+        "raw_workload_score": raw_workload_score,
         "priority_stress": priority_stress,
         "overdue_stress": overdue_stress,
-        "pending_stress": pending_stress
+        "pending_stress": pending_stress,
+        "total_workload_stress": total_workload_stress,
+        "normalized_workload_stress": normalized_workload_stress
     }
     
-    return total_workload_stress, total_hours_worked, workload_details
+    return normalized_workload_stress, total_hours_worked, workload_details
 
-def calculate_final_stress_score(normalized_pss: float, workload_stress_score: float) -> tuple[float, str]:
+def calculate_final_stress_score(normalized_pss: float, normalized_workload: float) -> tuple[float, str]:
     """
-    Calculate final work stress score using the formula:
-    final_stress_score = (normalized_pss × 0.6) + (workload_stress_score × 0.4)
+    Calculate final work stress score using the updated formula:
+    final_stress_score = (normalized_pss × 0.7) + (normalized_workload × 0.3)
     """
-    final_stress_score = (normalized_pss * 0.6) + (workload_stress_score * 0.4)
+    final_stress_score = (normalized_pss * 0.7) + (normalized_workload * 0.3)
     
     # Determine stress level based on thresholds
     if final_stress_score <= 3.0:
@@ -197,10 +200,10 @@ def submit_stress_assessment(
         pss_score, normalized_pss = calculate_pss_score(request.answers)
         
         # Calculate workload stress
-        workload_stress_score, total_hours_worked, workload_details = calculate_workload_stress(db, current_user.id)
+        normalized_workload_stress, total_hours_worked, workload_details = calculate_workload_stress(db, current_user.id)
         
         # Calculate final stress score
-        final_score, level = calculate_final_stress_score(normalized_pss, workload_stress_score)
+        final_score, level = calculate_final_stress_score(normalized_pss, normalized_workload_stress)
         
         # For supervisors, force share_with_supervisor to False
         if current_user.role == UserRole.supervisor:
@@ -220,7 +223,7 @@ def submit_stress_assessment(
             setattr(existing_score, 'level', level)
             setattr(existing_score, 'pss_score', pss_score)
             setattr(existing_score, 'normalized_pss', normalized_pss)
-            setattr(existing_score, 'workload_stress_score', workload_stress_score)
+            setattr(existing_score, 'workload_stress_score', normalized_workload_stress)
             setattr(existing_score, 'total_hours_worked', total_hours_worked)
             setattr(existing_score, 'share_with_supervisor', request.share_with_supervisor)
             setattr(existing_score, 'share_with_hr', request.share_with_hr)
@@ -234,7 +237,7 @@ def submit_stress_assessment(
                 "level": level,
                 "pss_score": pss_score,
                 "normalized_pss": normalized_pss,
-                "workload_stress_score": workload_stress_score,
+                "workload_stress_score": normalized_workload_stress,
                 "total_hours_worked": total_hours_worked,
                 "id": existing_score.id
             }
@@ -246,7 +249,7 @@ def submit_stress_assessment(
                 level=level,
                 pss_score=pss_score,
                 normalized_pss=normalized_pss,
-                workload_stress_score=workload_stress_score,
+                workload_stress_score=normalized_workload_stress,
                 total_hours_worked=total_hours_worked,
                 share_with_supervisor=request.share_with_supervisor,
                 share_with_hr=request.share_with_hr
@@ -261,7 +264,7 @@ def submit_stress_assessment(
                 "level": level,
                 "pss_score": pss_score,
                 "normalized_pss": normalized_pss,
-                "workload_stress_score": workload_stress_score,
+                "workload_stress_score": normalized_workload_stress,
                 "total_hours_worked": total_hours_worked,
                 "id": stress_score.id
             }
