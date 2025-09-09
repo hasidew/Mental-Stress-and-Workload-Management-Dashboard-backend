@@ -118,4 +118,21 @@ def refresh_token(current_user: User = Depends(get_current_user), db: Session = 
     
     # Create new token with current role
     access_token = create_access_token(data={"sub": db_user.username, "role": db_user.role.value})
-    return {"access_token": access_token, "token_type": "bearer", "role": db_user.role.value, "username": db_user.username} 
+    return {"access_token": access_token, "token_type": "bearer", "role": db_user.role.value, "username": db_user.username}
+
+# Get user name endpoint
+@auth_router.get("/user/name")
+def get_user_name(current_user: User = Depends(get_current_user)):
+    """Get the display name of the authenticated user"""
+    try:
+        # Return the user's name from the database
+        display_name = current_user.name if current_user.name else current_user.username
+        
+        return {
+            "displayName": display_name
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error retrieving user name: {str(e)}"
+        ) 
