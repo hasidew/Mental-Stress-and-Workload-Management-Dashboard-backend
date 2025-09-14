@@ -129,7 +129,7 @@ class Team(Base):
     # Relationships
     department = relationship("Department", back_populates="teams")
     supervisor = relationship("User", foreign_keys=[supervisor_id])
-    employees = relationship("User", foreign_keys="User.team_id")
+    employees = relationship("User", foreign_keys="User.team_id", overlaps="team")
 
 class User(Base):
     __tablename__ = "users"
@@ -148,7 +148,7 @@ class User(Base):
 
     # Relationships
     department = relationship("Department", back_populates="employees")
-    team = relationship("Team", foreign_keys=[team_id])
+    team = relationship("Team", foreign_keys=[team_id], overlaps="employees")
     stress_scores = relationship("StressScore", back_populates="employee")
     daily_workloads = relationship("DailyWorkload", back_populates="employee")
     assigned_works = relationship("WorkAssignment", back_populates="employee", foreign_keys='WorkAssignment.employee_id')
