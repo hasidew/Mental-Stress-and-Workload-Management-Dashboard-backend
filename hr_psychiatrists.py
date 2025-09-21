@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, time, timedelta
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr, validator, ValidationError
-from models import User, Consultant, ConsultantAvailability, ConsultantBooking, BookingStatus
+from models import User, Consultant, ConsultantAvailability, ConsultantBooking, BookingStatus, Notification
 from dependencies import get_db, require_role, UserRole
 from sqlalchemy import func
 import re
@@ -285,7 +285,7 @@ def update_psychiatrist(psychiatrist_id: int, request: UpdatePsychiatristRequest
     if request.email is not None or request.password is not None:
         # Find the user account for this consultant
         user = db.query(User).filter(
-            User.username == consultant.name,  # Assuming username is stored as consultant name
+            User.name == consultant.name,  # Match by name field
             User.role == UserRole.psychiatrist
         ).first()
         
@@ -351,20 +351,37 @@ def delete_psychiatrist(psychiatrist_id: int, current_user: User = Depends(requi
     if not consultant:
         raise HTTPException(status_code=404, detail="Psychiatrist not found")
     
-    # Find and delete the associated user account
-    user = db.query(User).filter(
-        User.username == consultant.name,
-        User.role == UserRole.psychiatrist
-    ).first()
-    
-    if user:
-        db.delete(user)
-    
-    # Delete the consultant (availabilities will be deleted due to cascade)
-    db.delete(consultant)
-    db.commit()
-    
-    return {"message": "Psychiatrist deleted successfully"}
+    try:
+        # First, get all bookings associated with this consultant
+        bookings = db.query(ConsultantBooking).filter(ConsultantBooking.consultant_id == psychiatrist_id).all()
+        
+        # Delete notifications that reference these bookings
+        for booking in bookings:
+            notifications = db.query(Notification).filter(Notification.related_booking_id == booking.id).all()
+            for notification in notifications:
+                db.delete(notification)
+        
+        # Then delete all bookings
+        for booking in bookings:
+            db.delete(booking)
+        
+        # Find and delete the associated user account
+        user = db.query(User).filter(
+            User.name == consultant.name,
+            User.role == UserRole.psychiatrist
+        ).first()
+        
+        if user:
+            db.delete(user)
+        
+        # Delete the consultant (availabilities will be deleted due to cascade)
+        db.delete(consultant)
+        db.commit()
+        
+        return {"message": "Psychiatrist deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete psychiatrist: {str(e)}")
 
 @router.get("/{psychiatrist_id}/bookings")
 def get_psychiatrist_bookings(psychiatrist_id: int, current_user: User = Depends(require_role(UserRole.hr_manager)), db: Session = Depends(get_db)):
